@@ -438,6 +438,9 @@ int32_t doCast(const SongData& SongTodo)
 							WriteChatf("MQ2Medley::doCast - cannot find targetID=%d for to cast \"%s\", SKIPPING", SongTodo.targetID, SongTodo.name.c_str());
 							return -1;
 						}
+						//
+						//
+						//
 
 						if (UseBandolier == 0) { // Use /exchange instead of bandolier
 							std::string command = "/multiline ; /stopsong ; ";
@@ -488,6 +491,7 @@ int32_t doCast(const SongData& SongTodo)
 							}
 							else {
 								sprintf(szTemp, "/multiline ; /stopsong ; /bandolier activate %s ; /cast %d", SongTodo.bandolier.c_str(), gemNum);
+								lastSongType = SongTodo.songType;
 								DebugSpew("MQ2Medley::doCast - /multiline ; /stopsong ; /bandolier activate %s ; /cast %d", SongTodo.bandolier.c_str(), gemNum);
 							}
 						}
