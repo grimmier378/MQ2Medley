@@ -424,7 +424,7 @@ int32_t doCast(const SongData& SongTodo)
 				for (int i = 0; i < NUM_SPELL_GEMS; i++)
 				{
 					PSPELL pSpell = GetSpellByID(GetPcProfile()->MemorizedSpells[i]);
-					if (pSpell && starts_with(pSpell->Name, SongTodo.name)) {
+					if (pSpell && (pSpell->Name == SongTodo.name)) {
 						int gemNum = i + 1;
 
 						if (!SongTodo.targetID) {
@@ -569,6 +569,57 @@ bool isKnownSwapSet(const std::string& type) {
 	return false;
 }
 
+void parseOld(const char* szTemp, SongData& medleySong) {
+	char* pNext;
+	char* p = strtok_s(const_cast<char*>(szTemp), "^", &pNext);
+	if (p) {
+		medleySong = getSongData(p);
+		if (medleySong.type == SongData::NOT_FOUND) {
+			// Handle error...
+			return;
+		}
+		p = strtok_s(nullptr, "^", &pNext);
+		if (p) medleySong.durationExp = p;
+		p = strtok_s(nullptr, "^", &pNext);
+		if (p) medleySong.conditionalExp = p;
+		p = strtok_s(nullptr, "^", &pNext);
+		if (p) medleySong.targetExp = p;
+	}
+}
+
+void parseNew(const char* szTemp, SongData& medleySong, const std::map<std::string, std::string>& conditions) {
+	char* pNext;
+	char* p = strtok_s(const_cast<char*>(szTemp), "|", &pNext);
+	if (p) {
+		medleySong = getSongData(p);
+		if (medleySong.type == SongData::NOT_FOUND) {
+			// Handle error...
+			return;
+		}
+		p = strtok_s(nullptr, "|", &pNext);
+		if (p) medleySong.durationExp = p;
+		p = strtok_s(nullptr, "|", &pNext);
+		if (p) {
+			if (isKnownSwapSet(p)) {
+				medleySong.swapSet = p;
+				p = strtok_s(nullptr, "|", &pNext);
+			} else {
+				medleySong.swapSet = "noswap";
+			}
+		}
+		if (p) {
+			auto it = conditions.find(p);
+			if (it != conditions.end()) {
+				medleySong.conditionalExp = it->second;
+			} else {
+				medleySong.conditionalExp = p; // Use the key as a direct condition
+			}
+			p = strtok_s(nullptr, "|", &pNext);
+		}
+		if (p) medleySong.targetExp = p;
+	}
+}
+
 void Load_MQ2Medley_INI_Medley(PCHARINFO pCharInfo, const std::string& medleyNameIni)
 {
 	char szTemp[MAX_STRING] = { 0 };
@@ -624,91 +675,28 @@ void Load_MQ2Medley_INI_Medley(PCHARINFO pCharInfo, const std::string& medleyNam
 	for (int i = 0; i < MAX_MEDLEY_SIZE; i++) {
 		std::string songKey = "song" + std::to_string(i + 1);
 		if (GetPrivateProfileString(iniSection.c_str(), songKey.c_str(), "", szTemp, MAX_STRING, INIFileName)) {
-			SongData medleySong = nullSong;
+			// Initialize medleySong with default values
+			SongData medleySong("", SongData::NOT_FOUND, 0);
 
-			// Determine the separator
 			char separator = strchr(szTemp, '|') ? '|' : '^';
-			char* nextPart = strchr(szTemp, separator);
-
-			// Extract song name
-			if (nextPart != nullptr) {
-				std::string songName(szTemp, nextPart - szTemp);
-				medleySong = getSongData(songName.c_str());
-				if (medleySong.type == SongData::NOT_FOUND) {
-					continue;
-				}
+			if (separator == '^') {
+				parseOld(szTemp, medleySong);
 			} else {
-				// Handle case where no separator is found
-				medleySong = getSongData(szTemp);
-				if (medleySong.type == SongData::NOT_FOUND) {
-					continue;
-				}
-				nextPart = szTemp + strlen(szTemp); // Set nextPart to the end of the string
+				parseNew(szTemp, medleySong, conditions);
 			}
 
-			// Move to the next part for parsing duration, swapSet, and condition
-			char* p = nextPart + 1;
-			if (p && *p != '\0') {
-				// Parse duration
-				char* durationEnd = strchr(p, separator);
-				if (durationEnd != nullptr) {
-					medleySong.durationExp.assign(p, durationEnd - p);
-					p = durationEnd + 1; // Move past the separator
-				} else {
-					medleySong.durationExp = p; // Assign remaining string to duration
-					p = nullptr; // No more data to parse
-				}
-			}
-
-			// Parse swapSet or condition
-			if (p && *p != '\0') {
-				char* swapSetEnd = strchr(p, separator);
-				if (swapSetEnd != nullptr) {
-					std::string swapSet(p, swapSetEnd - p);
-					if (isKnownSwapSet(swapSet)) {
-						medleySong.swapSet = swapSet;
-						p = swapSetEnd + 1; // Move past the separator
-					} else {
-						medleySong.swapSet = "noswap"; // Default to noswap
-					}
-				} else {
-					medleySong.swapSet = "noswap"; // Default to noswap
-				}
-			}
-
-			// Parse condition for both formats
-			if (p && *p != '\0') {
-				if (separator == '|') {
-					// New format with condition mapping
-					auto it = conditions.find(p);
-					if (it != conditions.end()) {
-						medleySong.conditionalExp = it->second;
-					} else {
-						medleySong.conditionalExp = p; // Direct condition or default
-					}
-				} else {
-					// Old format: Direct condition
-					medleySong.conditionalExp = p;
-				}
-			} else {
-				medleySong.conditionalExp = "1"; // Default condition if not specified
-			}
-			if (p = strtok_s(nullptr, &separator, &pNext))
-			{
-				medleySong.targetExp = p;
-			}
-		
-			// Read bandolier information if any, default to 1 if not
+			// Read bandolier information
 			std::string bandolierKey = "bandolier" + std::to_string(i + 1);
 			if (GetPrivateProfileString(iniSection.c_str(), bandolierKey.c_str(), "", szTemp, MAX_STRING, INIFileName)) {
 				medleySong.bandolier = szTemp;
-			}
-			else {
-				medleySong.bandolier = "1"; // Default value
+			} else {
+				medleySong.bandolier = "1";
 			}
 
 			if (DebugMode) {
-				WriteChatf("Debug: Processing song - Name: %s, Duration: %s, SwapSet: %s, Condition: %s, Bandolier: %s", medleySong.name.c_str(), medleySong.durationExp.c_str(), medleySong.swapSet.c_str(), medleySong.conditionalExp.c_str(), medleySong.bandolier.c_str());
+				WriteChatf("Debug: Processing song - Name: %s, Duration: %s, SwapSet: %s, Condition: %s, Bandolier: %s, Target: %s", 
+					medleySong.name.c_str(), medleySong.durationExp.c_str(), medleySong.swapSet.c_str(), 
+					medleySong.conditionalExp.c_str(), medleySong.bandolier.c_str(), medleySong.targetExp.c_str());
 			}
 
 			if (medleySong.type != SongData::NOT_FOUND) {
@@ -720,7 +708,6 @@ void Load_MQ2Medley_INI_Medley(PCHARINFO pCharInfo, const std::string& medleyNam
 	GetPrivateProfileString(iniSection.c_str(), "SongIF", "", SongIF, MAX_STRING, INIFileName);
 	conditions.clear();
 }
-
 
 void StopTwistCommand(PSPAWNINFO pChar, PCHAR szLine)
 {
