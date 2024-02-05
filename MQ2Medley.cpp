@@ -362,6 +362,7 @@ SongData getSongData(const char* name)
 	castTime = GetAACastTime(spellName);
 	if (castTime >= 0)
 	{
+		castTime += 300;
 		return SongData(spellName, SongData::AA, castTime);
 	}
 
@@ -512,7 +513,7 @@ int32_t doCast(const SongData& SongTodo)
 				return SongTodo.getCastTimeMs();
 			case SongData::AA:
 				DebugSpew("MQ2Medley::doCast - Next Song (Casting AA  \"%s\")", SongTodo.name.c_str());
-				sprintf_s(szTemp, "/multiline ; /medley queue ; ${Me.AltAbility[%s].ID}", SongTodo.name.c_str());
+				sprintf_s(szTemp, "/multiline ; /stopsong ; /alt act ${Me.AltAbility[%s].ID}", SongTodo.name.c_str());
 				MQ2MedleyDoCommand(GetCharInfo()->pSpawn, szTemp);
 				// FIXME: Narrowing conversion
 				return SongTodo.getCastTimeMs();
