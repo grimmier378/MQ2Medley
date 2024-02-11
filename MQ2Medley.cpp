@@ -362,7 +362,6 @@ SongData getSongData(const char* name)
 	castTime = GetAACastTime(spellName);
 	if (castTime >= 0)
 	{
-		castTime += 300;
 		return SongData(spellName, SongData::AA, castTime);
 	}
 
